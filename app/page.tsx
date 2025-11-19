@@ -51,6 +51,38 @@ function HomeContent() {
     }
   }, [searchParams]);
 
+  // Setup SSE connection for real-time updates
+  useEffect(() => {
+    if (!authenticated) return;
+
+    const eventSource = new EventSource('/api/events');
+
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+
+        if (data.type === 'calendar-update') {
+          console.log('Calendar update received:', data);
+          setMessage('Calendar updated! Refreshing events...');
+          fetchEvents();
+          fetchWatchStatus();
+          setTimeout(() => setMessage(''), 3000);
+        }
+      } catch (error) {
+        console.error('Error parsing SSE message:', error);
+      }
+    };
+
+    eventSource.onerror = (error) => {
+      console.error('SSE connection error:', error);
+      eventSource.close();
+    };
+
+    return () => {
+      eventSource.close();
+    };
+  }, [authenticated]);
+
   const checkAuthStatus = async () => {
     try {
       const response = await fetch('/api/auth/status');
