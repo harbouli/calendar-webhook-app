@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { useEffect, useState, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useEffect, useState, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 
 interface CalendarEvent {
   id?: string;
@@ -32,45 +32,47 @@ function HomeContent() {
   const [loading, setLoading] = useState(true);
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [watchStatus, setWatchStatus] = useState<WatchStatus | null>(null);
-  const [message, setMessage] = useState('');
-  const [messageType, setMessageType] = useState<'success' | 'error' | 'info'>('info');
+  const [message, setMessage] = useState("");
+  const [messageType, setMessageType] = useState<"success" | "error" | "info">(
+    "info"
+  );
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newEvent, setNewEvent] = useState({
-    summary: '',
-    description: '',
-    location: '',
-    startDateTime: '',
-    endDateTime: '',
+    summary: "",
+    description: "",
+    location: "",
+    startDateTime: "",
+    endDateTime: "",
   });
 
   useEffect(() => {
     checkAuthStatus();
 
     // Check for authentication success message
-    if (searchParams.get('authenticated') === 'true') {
-      setMessage('Successfully authenticated with Google!');
-      setMessageType('success');
+    if (searchParams.get("authenticated") === "true") {
+      setMessage("Successfully authenticated with Google!");
+      setMessageType("success");
 
       // Clean up URL parameter
       const url = new URL(window.location.href);
-      url.searchParams.delete('authenticated');
-      window.history.replaceState({}, '', url.toString());
+      url.searchParams.delete("authenticated");
+      window.history.replaceState({}, "", url.toString());
 
-      setTimeout(() => setMessage(''), 5000);
+      setTimeout(() => setMessage(""), 5000);
     }
 
     // Check for error message
-    const error = searchParams.get('error');
+    const error = searchParams.get("error");
     if (error) {
       setMessage(`Error: ${error}`);
-      setMessageType('error');
+      setMessageType("error");
 
       // Clean up URL parameter
       const url = new URL(window.location.href);
-      url.searchParams.delete('error');
-      window.history.replaceState({}, '', url.toString());
+      url.searchParams.delete("error");
+      window.history.replaceState({}, "", url.toString());
 
-      setTimeout(() => setMessage(''), 5000);
+      setTimeout(() => setMessage(""), 5000);
     }
   }, [searchParams]);
 
@@ -78,27 +80,27 @@ function HomeContent() {
   useEffect(() => {
     if (!authenticated) return;
 
-    const eventSource = new EventSource('/api/events');
+    const eventSource = new EventSource("/api/events");
 
     eventSource.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
 
-        if (data.type === 'calendar-update') {
-          console.log('Calendar update received:', data);
-          setMessage('Calendar updated! Refreshing events...');
-          setMessageType('info');
+        if (data.type === "calendar-update") {
+          console.log("Calendar update received:", data);
+          setMessage("Calendar updated! Refreshing events...");
+          setMessageType("info");
           fetchEvents();
           fetchWatchStatus();
-          setTimeout(() => setMessage(''), 3000);
+          setTimeout(() => setMessage(""), 3000);
         }
       } catch (error) {
-        console.error('Error parsing SSE message:', error);
+        console.error("Error parsing SSE message:", error);
       }
     };
 
     eventSource.onerror = (error) => {
-      console.error('SSE connection error:', error);
+      console.error("SSE connection error:", error);
       eventSource.close();
     };
 
@@ -109,7 +111,7 @@ function HomeContent() {
 
   const checkAuthStatus = async () => {
     try {
-      const response = await fetch('/api/auth/status');
+      const response = await fetch("/api/auth/status");
       const data = await response.json();
       setAuthenticated(data.authenticated);
 
@@ -118,7 +120,7 @@ function HomeContent() {
         fetchWatchStatus();
       }
     } catch (error) {
-      console.error('Error checking auth status:', error);
+      console.error("Error checking auth status:", error);
     } finally {
       setLoading(false);
     }
@@ -126,90 +128,90 @@ function HomeContent() {
 
   const fetchEvents = async () => {
     try {
-      const response = await fetch('/api/calendar/events?maxResults=10');
+      const response = await fetch("/api/calendar/events?maxResults=10");
       const data = await response.json();
       if (data.success) {
         setEvents(data.events);
       }
     } catch (error) {
-      console.error('Error fetching events:', error);
-      setMessage('Error fetching events');
-      setMessageType('error');
+      console.error("Error fetching events:", error);
+      setMessage("Error fetching events");
+      setMessageType("error");
     }
   };
 
   const fetchWatchStatus = async () => {
     try {
-      const response = await fetch('/api/calendar/watch');
+      const response = await fetch("/api/calendar/watch");
       const data = await response.json();
       setWatchStatus(data);
     } catch (error) {
-      console.error('Error fetching watch status:', error);
+      console.error("Error fetching watch status:", error);
     }
   };
 
   const startWatch = async () => {
     try {
-      setMessage('Starting webhook watch...');
-      setMessageType('info');
-      const response = await fetch('/api/calendar/watch', {
-        method: 'POST',
+      setMessage("Starting webhook watch...");
+      setMessageType("info");
+      const response = await fetch("/api/calendar/watch", {
+        method: "POST",
       });
       const data = await response.json();
 
       if (data.success) {
-        setMessage('Webhook watch started successfully!');
-        setMessageType('success');
+        setMessage("Webhook watch started successfully!");
+        setMessageType("success");
         fetchWatchStatus();
       } else {
         setMessage(`Error: ${data.error}`);
-        setMessageType('error');
+        setMessageType("error");
       }
     } catch (error) {
-      console.error('Error starting watch:', error);
-      setMessage('Error starting webhook watch');
-      setMessageType('error');
+      console.error("Error starting watch:", error);
+      setMessage("Error starting webhook watch");
+      setMessageType("error");
     }
   };
 
   const stopWatch = async () => {
     try {
-      setMessage('Stopping webhook watch...');
-      setMessageType('info');
-      const response = await fetch('/api/calendar/watch', {
-        method: 'DELETE',
+      setMessage("Stopping webhook watch...");
+      setMessageType("info");
+      const response = await fetch("/api/calendar/watch", {
+        method: "DELETE",
       });
       const data = await response.json();
 
       if (data.success) {
-        setMessage('Webhook watch stopped successfully!');
-        setMessageType('success');
+        setMessage("Webhook watch stopped successfully!");
+        setMessageType("success");
         fetchWatchStatus();
       } else {
         setMessage(`Error: ${data.error}`);
-        setMessageType('error');
+        setMessageType("error");
       }
     } catch (error) {
-      console.error('Error stopping watch:', error);
-      setMessage('Error stopping webhook watch');
-      setMessageType('error');
+      console.error("Error stopping watch:", error);
+      setMessage("Error stopping webhook watch");
+      setMessageType("error");
     }
   };
 
   const formatDate = (dateString?: string) => {
-    if (!dateString) return 'N/A';
+    if (!dateString) return "N/A";
     return new Date(dateString).toLocaleString();
   };
 
   const getMessageStyles = () => {
     switch (messageType) {
-      case 'success':
-        return 'bg-green-100 text-green-700';
-      case 'error':
-        return 'bg-red-100 text-red-700';
-      case 'info':
+      case "success":
+        return "bg-green-100 text-green-700";
+      case "error":
+        return "bg-red-100 text-red-700";
+      case "info":
       default:
-        return 'bg-blue-100 text-blue-700';
+        return "bg-blue-100 text-blue-700";
     }
   };
 
@@ -217,14 +219,14 @@ function HomeContent() {
     e.preventDefault();
 
     if (!newEvent.summary || !newEvent.startDateTime || !newEvent.endDateTime) {
-      setMessage('Please fill in all required fields');
-      setMessageType('error');
+      setMessage("Please fill in all required fields");
+      setMessageType("error");
       return;
     }
 
     try {
-      setMessage('Creating event...');
-      setMessageType('info');
+      setMessage("Creating event...");
+      setMessageType("info");
 
       // Convert datetime-local to ISO format
       const eventData = {
@@ -235,10 +237,10 @@ function HomeContent() {
         endDateTime: new Date(newEvent.endDateTime).toISOString(),
       };
 
-      const response = await fetch('/api/calendar/create', {
-        method: 'POST',
+      const response = await fetch("/api/calendar/create", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify(eventData),
       });
@@ -246,25 +248,25 @@ function HomeContent() {
       const data = await response.json();
 
       if (data.success) {
-        setMessage('Event created successfully!');
-        setMessageType('success');
+        setMessage("Event created successfully!");
+        setMessageType("success");
         setShowCreateForm(false);
         setNewEvent({
-          summary: '',
-          description: '',
-          location: '',
-          startDateTime: '',
-          endDateTime: '',
+          summary: "",
+          description: "",
+          location: "",
+          startDateTime: "",
+          endDateTime: "",
         });
         fetchEvents();
       } else {
         setMessage(`Error: ${data.error}`);
-        setMessageType('error');
+        setMessageType("error");
       }
     } catch (error) {
-      console.error('Error creating event:', error);
-      setMessage('Error creating event');
-      setMessageType('error');
+      console.error("Error creating event:", error);
+      setMessage("Error creating event");
+      setMessageType("error");
     }
   };
 
@@ -272,32 +274,6 @@ function HomeContent() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-xl">Loading...</div>
-      </div>
-    );
-  }
-
-  if (!authenticated) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="bg-white p-8 rounded-lg shadow-md max-w-md w-full">
-          <h1 className="text-3xl font-bold mb-4 text-gray-800">
-            Google Calendar Webhook Admin
-          </h1>
-          <p className="text-gray-600 mb-6">
-            Sign in with your Google account to manage calendar webhooks.
-          </p>
-          <a
-            href="/api/auth/login"
-            className="block w-full bg-blue-600 text-white text-center py-3 rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            Sign in with Google
-          </a>
-          {message && (
-            <div className={`mt-4 p-3 rounded ${getMessageStyles()}`}>
-              {message}
-            </div>
-          )}
-        </div>
       </div>
     );
   }
@@ -330,19 +306,23 @@ function HomeContent() {
             <div className="space-y-3">
               <div className="flex items-center gap-2">
                 <span className="font-medium text-gray-700">Status:</span>
-                <span className={`px-3 py-1 rounded-full text-sm ${
-                  watchStatus.active
-                    ? 'bg-green-100 text-green-700'
-                    : 'bg-red-100 text-red-700'
-                }`}>
-                  {watchStatus.active ? 'Active' : 'Inactive'}
+                <span
+                  className={`px-3 py-1 rounded-full text-sm ${
+                    watchStatus.active
+                      ? "bg-green-100 text-green-700"
+                      : "bg-red-100 text-red-700"
+                  }`}
+                >
+                  {watchStatus.active ? "Active" : "Inactive"}
                 </span>
               </div>
 
               {watchStatus.channelId && (
                 <>
                   <div>
-                    <span className="font-medium text-gray-700">Channel ID:</span>
+                    <span className="font-medium text-gray-700">
+                      Channel ID:
+                    </span>
                     <span className="ml-2 text-gray-600 font-mono text-sm">
                       {watchStatus.channelId}
                     </span>
@@ -395,7 +375,7 @@ function HomeContent() {
               onClick={() => setShowCreateForm(!showCreateForm)}
               className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
             >
-              {showCreateForm ? 'Cancel' : '+ New Event'}
+              {showCreateForm ? "Cancel" : "+ New Event"}
             </button>
           </div>
 
@@ -408,7 +388,9 @@ function HomeContent() {
                 <input
                   type="text"
                   value={newEvent.summary}
-                  onChange={(e) => setNewEvent({ ...newEvent, summary: e.target.value })}
+                  onChange={(e) =>
+                    setNewEvent({ ...newEvent, summary: e.target.value })
+                  }
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Meeting with team"
                   required
@@ -421,7 +403,9 @@ function HomeContent() {
                 </label>
                 <textarea
                   value={newEvent.description}
-                  onChange={(e) => setNewEvent({ ...newEvent, description: e.target.value })}
+                  onChange={(e) =>
+                    setNewEvent({ ...newEvent, description: e.target.value })
+                  }
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Event description..."
                   rows={3}
@@ -435,7 +419,9 @@ function HomeContent() {
                 <input
                   type="text"
                   value={newEvent.location}
-                  onChange={(e) => setNewEvent({ ...newEvent, location: e.target.value })}
+                  onChange={(e) =>
+                    setNewEvent({ ...newEvent, location: e.target.value })
+                  }
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Conference room A"
                 />
@@ -449,7 +435,12 @@ function HomeContent() {
                   <input
                     type="datetime-local"
                     value={newEvent.startDateTime}
-                    onChange={(e) => setNewEvent({ ...newEvent, startDateTime: e.target.value })}
+                    onChange={(e) =>
+                      setNewEvent({
+                        ...newEvent,
+                        startDateTime: e.target.value,
+                      })
+                    }
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     required
                   />
@@ -462,7 +453,9 @@ function HomeContent() {
                   <input
                     type="datetime-local"
                     value={newEvent.endDateTime}
-                    onChange={(e) => setNewEvent({ ...newEvent, endDateTime: e.target.value })}
+                    onChange={(e) =>
+                      setNewEvent({ ...newEvent, endDateTime: e.target.value })
+                    }
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     required
                   />
@@ -503,14 +496,15 @@ function HomeContent() {
                   className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
                 >
                   <h3 className="font-semibold text-lg text-gray-800">
-                    {event.summary || 'Untitled Event'}
+                    {event.summary || "Untitled Event"}
                   </h3>
                   {event.description && (
                     <p className="text-gray-600 mt-1">{event.description}</p>
                   )}
                   <div className="mt-2 text-sm text-gray-500">
                     <div>
-                      Start: {formatDate(event.start?.dateTime || event.start?.date)}
+                      Start:{" "}
+                      {formatDate(event.start?.dateTime || event.start?.date)}
                     </div>
                     <div>
                       End: {formatDate(event.end?.dateTime || event.end?.date)}
@@ -528,11 +522,13 @@ function HomeContent() {
 
 export default function Home() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-xl">Loading...</div>
-      </div>
-    }>
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+          <div className="text-xl">Loading...</div>
+        </div>
+      }
+    >
       <HomeContent />
     </Suspense>
   );
