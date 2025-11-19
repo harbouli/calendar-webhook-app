@@ -33,6 +33,7 @@ function HomeContent() {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [watchStatus, setWatchStatus] = useState<WatchStatus | null>(null);
   const [message, setMessage] = useState('');
+  const [messageType, setMessageType] = useState<'success' | 'error' | 'info'>('info');
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newEvent, setNewEvent] = useState({
     summary: '',
@@ -48,6 +49,13 @@ function HomeContent() {
     // Check for authentication success message
     if (searchParams.get('authenticated') === 'true') {
       setMessage('Successfully authenticated with Google!');
+      setMessageType('success');
+
+      // Clean up URL parameter
+      const url = new URL(window.location.href);
+      url.searchParams.delete('authenticated');
+      window.history.replaceState({}, '', url.toString());
+
       setTimeout(() => setMessage(''), 5000);
     }
 
@@ -55,6 +63,13 @@ function HomeContent() {
     const error = searchParams.get('error');
     if (error) {
       setMessage(`Error: ${error}`);
+      setMessageType('error');
+
+      // Clean up URL parameter
+      const url = new URL(window.location.href);
+      url.searchParams.delete('error');
+      window.history.replaceState({}, '', url.toString());
+
       setTimeout(() => setMessage(''), 5000);
     }
   }, [searchParams]);
@@ -72,6 +87,7 @@ function HomeContent() {
         if (data.type === 'calendar-update') {
           console.log('Calendar update received:', data);
           setMessage('Calendar updated! Refreshing events...');
+          setMessageType('info');
           fetchEvents();
           fetchWatchStatus();
           setTimeout(() => setMessage(''), 3000);
@@ -118,6 +134,7 @@ function HomeContent() {
     } catch (error) {
       console.error('Error fetching events:', error);
       setMessage('Error fetching events');
+      setMessageType('error');
     }
   };
 
@@ -134,6 +151,7 @@ function HomeContent() {
   const startWatch = async () => {
     try {
       setMessage('Starting webhook watch...');
+      setMessageType('info');
       const response = await fetch('/api/calendar/watch', {
         method: 'POST',
       });
@@ -141,19 +159,23 @@ function HomeContent() {
 
       if (data.success) {
         setMessage('Webhook watch started successfully!');
+        setMessageType('success');
         fetchWatchStatus();
       } else {
         setMessage(`Error: ${data.error}`);
+        setMessageType('error');
       }
     } catch (error) {
       console.error('Error starting watch:', error);
       setMessage('Error starting webhook watch');
+      setMessageType('error');
     }
   };
 
   const stopWatch = async () => {
     try {
       setMessage('Stopping webhook watch...');
+      setMessageType('info');
       const response = await fetch('/api/calendar/watch', {
         method: 'DELETE',
       });
@@ -161,13 +183,16 @@ function HomeContent() {
 
       if (data.success) {
         setMessage('Webhook watch stopped successfully!');
+        setMessageType('success');
         fetchWatchStatus();
       } else {
         setMessage(`Error: ${data.error}`);
+        setMessageType('error');
       }
     } catch (error) {
       console.error('Error stopping watch:', error);
       setMessage('Error stopping webhook watch');
+      setMessageType('error');
     }
   };
 
@@ -176,16 +201,30 @@ function HomeContent() {
     return new Date(dateString).toLocaleString();
   };
 
+  const getMessageStyles = () => {
+    switch (messageType) {
+      case 'success':
+        return 'bg-green-100 text-green-700';
+      case 'error':
+        return 'bg-red-100 text-red-700';
+      case 'info':
+      default:
+        return 'bg-blue-100 text-blue-700';
+    }
+  };
+
   const handleCreateEvent = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!newEvent.summary || !newEvent.startDateTime || !newEvent.endDateTime) {
       setMessage('Please fill in all required fields');
+      setMessageType('error');
       return;
     }
 
     try {
       setMessage('Creating event...');
+      setMessageType('info');
 
       // Convert datetime-local to ISO format
       const eventData = {
@@ -208,6 +247,7 @@ function HomeContent() {
 
       if (data.success) {
         setMessage('Event created successfully!');
+        setMessageType('success');
         setShowCreateForm(false);
         setNewEvent({
           summary: '',
@@ -219,10 +259,12 @@ function HomeContent() {
         fetchEvents();
       } else {
         setMessage(`Error: ${data.error}`);
+        setMessageType('error');
       }
     } catch (error) {
       console.error('Error creating event:', error);
       setMessage('Error creating event');
+      setMessageType('error');
     }
   };
 
@@ -251,7 +293,7 @@ function HomeContent() {
             Sign in with Google
           </a>
           {message && (
-            <div className="mt-4 p-3 bg-red-100 text-red-700 rounded">
+            <div className={`mt-4 p-3 rounded ${getMessageStyles()}`}>
               {message}
             </div>
           )}
@@ -273,7 +315,7 @@ function HomeContent() {
         </div>
 
         {message && (
-          <div className="mb-6 p-4 bg-blue-100 text-blue-700 rounded-lg">
+          <div className={`mb-6 p-4 rounded-lg ${getMessageStyles()}`}>
             {message}
           </div>
         )}
