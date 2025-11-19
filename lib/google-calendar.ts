@@ -61,7 +61,21 @@ export class GoogleCalendarClient {
       orderBy: 'startTime',
     });
 
-    return response.data.items || [];
+    const items = response.data.items || [];
+    return items.map(event => ({
+      id: event.id || undefined,
+      summary: event.summary || undefined,
+      description: event.description || undefined,
+      start: event.start ? {
+        dateTime: event.start.dateTime || undefined,
+        date: event.start.date || undefined,
+      } : undefined,
+      end: event.end ? {
+        dateTime: event.end.dateTime || undefined,
+        date: event.end.date || undefined,
+      } : undefined,
+      status: event.status || undefined,
+    }));
   }
 
   async watchCalendar(webhookUrl: string, channelId: string): Promise<any> {
