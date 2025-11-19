@@ -30,8 +30,12 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Get user info from Google
-    const oauth2Client = new google.auth.OAuth2();
+    // Get user info from Google using properly configured OAuth2 client
+    const oauth2Client = new google.auth.OAuth2(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET,
+      process.env.GOOGLE_REDIRECT_URI
+    );
     oauth2Client.setCredentials(tokens);
     const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
     const userInfo = await oauth2.userinfo.get();
