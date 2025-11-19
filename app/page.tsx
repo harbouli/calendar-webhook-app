@@ -33,6 +33,14 @@ function HomeContent() {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [watchStatus, setWatchStatus] = useState<WatchStatus | null>(null);
   const [message, setMessage] = useState('');
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [newEvent, setNewEvent] = useState({
+    summary: '',
+    description: '',
+    location: '',
+    startDateTime: '',
+    endDateTime: '',
+  });
 
   useEffect(() => {
     checkAuthStatus();
@@ -168,6 +176,56 @@ function HomeContent() {
     return new Date(dateString).toLocaleString();
   };
 
+  const handleCreateEvent = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!newEvent.summary || !newEvent.startDateTime || !newEvent.endDateTime) {
+      setMessage('Please fill in all required fields');
+      return;
+    }
+
+    try {
+      setMessage('Creating event...');
+
+      // Convert datetime-local to ISO format
+      const eventData = {
+        summary: newEvent.summary,
+        description: newEvent.description,
+        location: newEvent.location,
+        startDateTime: new Date(newEvent.startDateTime).toISOString(),
+        endDateTime: new Date(newEvent.endDateTime).toISOString(),
+      };
+
+      const response = await fetch('/api/calendar/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(eventData),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setMessage('Event created successfully!');
+        setShowCreateForm(false);
+        setNewEvent({
+          summary: '',
+          description: '',
+          location: '',
+          startDateTime: '',
+          endDateTime: '',
+        });
+        fetchEvents();
+      } else {
+        setMessage(`Error: ${data.error}`);
+      }
+    } catch (error) {
+      console.error('Error creating event:', error);
+      setMessage('Error creating event');
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -282,6 +340,100 @@ function HomeContent() {
             </div>
           ) : (
             <div>Loading watch status...</div>
+          )}
+        </div>
+
+        {/* Create Event Section */}
+        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-semibold text-gray-800">
+              Create New Event
+            </h2>
+            <button
+              onClick={() => setShowCreateForm(!showCreateForm)}
+              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+            >
+              {showCreateForm ? 'Cancel' : '+ New Event'}
+            </button>
+          </div>
+
+          {showCreateForm && (
+            <form onSubmit={handleCreateEvent} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Event Title <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={newEvent.summary}
+                  onChange={(e) => setNewEvent({ ...newEvent, summary: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Meeting with team"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Description
+                </label>
+                <textarea
+                  value={newEvent.description}
+                  onChange={(e) => setNewEvent({ ...newEvent, description: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Event description..."
+                  rows={3}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Location
+                </label>
+                <input
+                  type="text"
+                  value={newEvent.location}
+                  onChange={(e) => setNewEvent({ ...newEvent, location: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Conference room A"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Start Date & Time <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={newEvent.startDateTime}
+                    onChange={(e) => setNewEvent({ ...newEvent, startDateTime: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    End Date & Time <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={newEvent.endDateTime}
+                    onChange={(e) => setNewEvent({ ...newEvent, endDateTime: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+              >
+                Create Event
+              </button>
+            </form>
           )}
         </div>
 

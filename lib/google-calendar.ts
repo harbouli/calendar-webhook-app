@@ -78,6 +78,49 @@ export class GoogleCalendarClient {
     }));
   }
 
+  async createEvent(event: {
+    summary: string;
+    description?: string;
+    startDateTime: string;
+    endDateTime: string;
+    location?: string;
+  }): Promise<CalendarEvent> {
+    const calendar = google.calendar({ version: 'v3', auth: this.oauth2Client });
+
+    const response = await calendar.events.insert({
+      calendarId: 'primary',
+      requestBody: {
+        summary: event.summary,
+        description: event.description,
+        location: event.location,
+        start: {
+          dateTime: event.startDateTime,
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        },
+        end: {
+          dateTime: event.endDateTime,
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        },
+      },
+    });
+
+    const createdEvent = response.data;
+    return {
+      id: createdEvent.id || undefined,
+      summary: createdEvent.summary || undefined,
+      description: createdEvent.description || undefined,
+      start: createdEvent.start ? {
+        dateTime: createdEvent.start.dateTime || undefined,
+        date: createdEvent.start.date || undefined,
+      } : undefined,
+      end: createdEvent.end ? {
+        dateTime: createdEvent.end.dateTime || undefined,
+        date: createdEvent.end.date || undefined,
+      } : undefined,
+      status: createdEvent.status || undefined,
+    };
+  }
+
   async watchCalendar(webhookUrl: string, channelId: string): Promise<any> {
     const calendar = google.calendar({ version: 'v3', auth: this.oauth2Client });
 
