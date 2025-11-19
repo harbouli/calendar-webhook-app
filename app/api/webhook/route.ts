@@ -1,10 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { headers } from 'next/headers';
 import { eventEmitter } from '@/lib/event-emitter';
-import { TokenStorage } from '@/lib/token-storage';
-import { GoogleCalendarClient } from '@/lib/google-calendar';
 
-export async function POST(request: NextRequest) {
+export async function POST() {
   try {
     const headersList = await headers();
 
@@ -33,33 +31,18 @@ export async function POST(request: NextRequest) {
 
       case 'exists':
         // Calendar resource exists (normal notification)
-        console.log('Calendar event changed');
+        console.log('Calendar event changed for channel:', channelId);
 
-        // Fetch updated events and broadcast to connected clients
-        const storage = new TokenStorage();
-        const tokens = storage.getTokens();
+        // Broadcast update notification to all connected SSE clients
+        // Clients will fetch their own updated events using their sessions
+        eventEmitter.emit('calendar-update', {
+          channelId,
+          resourceId,
+          messageNumber,
+          timestamp: new Date().toISOString()
+        });
 
-        if (tokens) {
-          try {
-            const client = new GoogleCalendarClient();
-            client.setCredentials(tokens.access_token, tokens.refresh_token);
-            const events = await client.listEvents(10);
-
-            // Broadcast update to all connected SSE clients
-            eventEmitter.emit('calendar-update', {
-              events,
-              channelId,
-              resourceId,
-              messageNumber,
-              timestamp: new Date().toISOString()
-            });
-
-            console.log('Calendar update broadcasted to clients');
-          } catch (error) {
-            console.error('Error fetching calendar events in webhook:', error);
-          }
-        }
-
+        console.log('Calendar update notification broadcasted to clients');
         break;
 
       case 'not_exists':

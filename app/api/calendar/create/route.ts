@@ -1,13 +1,12 @@
 import { NextResponse } from 'next/server';
 import { GoogleCalendarClient } from '@/lib/google-calendar';
-import { TokenStorage } from '@/lib/token-storage';
+import { getSession } from '@/lib/session';
 
 export async function POST(request: Request) {
   try {
-    const storage = new TokenStorage();
-    const tokens = storage.getTokens();
+    const session = await getSession();
 
-    if (!tokens) {
+    if (!session.isLoggedIn || !session.accessToken) {
       return NextResponse.json(
         { success: false, error: 'Not authenticated' },
         { status: 401 }
@@ -25,7 +24,7 @@ export async function POST(request: Request) {
     }
 
     const client = new GoogleCalendarClient();
-    client.setCredentials(tokens.access_token, tokens.refresh_token);
+    client.setCredentials(session.accessToken, session.refreshToken);
 
     const event = await client.createEvent({
       summary,

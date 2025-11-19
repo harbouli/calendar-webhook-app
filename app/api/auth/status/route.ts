@@ -1,20 +1,19 @@
 import { NextResponse } from 'next/server';
-import { TokenStorage } from '@/lib/token-storage';
+import { getSession } from '@/lib/session';
 
 export async function GET() {
   try {
-    const storage = new TokenStorage();
-    const isAuthenticated = storage.isAuthenticated();
+    const session = await getSession();
 
     return NextResponse.json({
-      authenticated: isAuthenticated,
-      tokens: isAuthenticated ? storage.getTokens() : null
+      authenticated: session.isLoggedIn || false,
+      user: session.isLoggedIn ? {
+        userId: session.userId,
+        email: session.email,
+      } : null
     });
   } catch (error) {
     console.error('Error checking auth status:', error);
-    return NextResponse.json(
-      { error: 'Failed to check authentication status' },
-      { status: 500 }
-    );
+    return NextResponse.json({ authenticated: false, user: null });
   }
 }

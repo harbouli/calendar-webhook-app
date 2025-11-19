@@ -1,0 +1,545 @@
+'use client';
+
+import { useEffect, useState, Suspense } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
+
+interface CalendarEvent {
+  id?: string;
+  summary?: string;
+  description?: string;
+  start?: {
+    dateTime?: string;
+    date?: string;
+  };
+  end?: {
+    dateTime?: string;
+    date?: string;
+  };
+  status?: string;
+}
+
+interface WatchStatus {
+  active: boolean;
+  channelId?: string;
+  resourceId?: string;
+  expiration?: string;
+  expired?: boolean;
+}
+
+function DashboardContent() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const [authenticated, setAuthenticated] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<{ email: string } | null>(null);
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [watchStatus, setWatchStatus] = useState<WatchStatus | null>(null);
+  const [message, setMessage] = useState('');
+  const [messageType, setMessageType] = useState<'success' | 'error' | 'info'>('info');
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [newEvent, setNewEvent] = useState({
+    summary: '',
+    description: '',
+    location: '',
+    startDateTime: '',
+    endDateTime: '',
+  });
+
+  useEffect(() => {
+    checkAuthStatus();
+
+    // Check for authentication success message
+    if (searchParams.get('authenticated') === 'true') {
+      setMessage('Successfully authenticated with Google!');
+      setMessageType('success');
+
+      // Clean up URL parameter
+      const url = new URL(window.location.href);
+      url.searchParams.delete('authenticated');
+      window.history.replaceState({}, '', url.toString());
+
+      setTimeout(() => setMessage(''), 5000);
+    }
+  }, [searchParams, router]);
+
+  // Setup SSE connection for real-time updates
+  useEffect(() => {
+    if (!authenticated) return;
+
+    const eventSource = new EventSource('/api/events');
+
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+
+        if (data.type === 'calendar-update') {
+          console.log('Calendar update received:', data);
+          setMessage('Calendar updated! Refreshing events...');
+          setMessageType('info');
+          fetchEvents();
+          fetchWatchStatus();
+          setTimeout(() => setMessage(''), 3000);
+        }
+      } catch (error) {
+        console.error('Error parsing SSE message:', error);
+      }
+    };
+
+    eventSource.onerror = (error) => {
+      console.error('SSE connection error:', error);
+      eventSource.close();
+    };
+
+    return () => {
+      eventSource.close();
+    };
+  }, [authenticated]);
+
+  const checkAuthStatus = async () => {
+    try {
+      const response = await fetch('/api/auth/status');
+      const data = await response.json();
+      setAuthenticated(data.authenticated);
+      setUser(data.user);
+
+      if (data.authenticated) {
+        fetchEvents();
+        fetchWatchStatus();
+      } else {
+        // Not authenticated, redirect to login
+        router.push('/login');
+      }
+    } catch (error) {
+      console.error('Error checking auth status:', error);
+      router.push('/login');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchEvents = async () => {
+    try {
+      const response = await fetch('/api/calendar/events?maxResults=10');
+      const data = await response.json();
+      if (data.success) {
+        setEvents(data.events);
+      }
+    } catch (error) {
+      console.error('Error fetching events:', error);
+      setMessage('Error fetching events');
+      setMessageType('error');
+    }
+  };
+
+  const fetchWatchStatus = async () => {
+    try {
+      const response = await fetch('/api/calendar/watch');
+      const data = await response.json();
+      setWatchStatus(data);
+    } catch (error) {
+      console.error('Error fetching watch status:', error);
+    }
+  };
+
+  const startWatch = async () => {
+    try {
+      setMessage('Starting webhook watch...');
+      setMessageType('info');
+      const response = await fetch('/api/calendar/watch', {
+        method: 'POST',
+      });
+      const data = await response.json();
+
+      if (data.success) {
+        setMessage('Webhook watch started successfully!');
+        setMessageType('success');
+        fetchWatchStatus();
+      } else {
+        setMessage(`Error: ${data.error}`);
+        setMessageType('error');
+      }
+    } catch (error) {
+      console.error('Error starting watch:', error);
+      setMessage('Error starting webhook watch');
+      setMessageType('error');
+    }
+  };
+
+  const stopWatch = async () => {
+    try {
+      setMessage('Stopping webhook watch...');
+      setMessageType('info');
+      const response = await fetch('/api/calendar/watch', {
+        method: 'DELETE',
+      });
+      const data = await response.json();
+
+      if (data.success) {
+        setMessage('Webhook watch stopped successfully!');
+        setMessageType('success');
+        fetchWatchStatus();
+      } else {
+        setMessage(`Error: ${data.error}`);
+        setMessageType('error');
+      }
+    } catch (error) {
+      console.error('Error stopping watch:', error);
+      setMessage('Error stopping webhook watch');
+      setMessageType('error');
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+      router.push('/login');
+    } catch (error) {
+      console.error('Error logging out:', error);
+    }
+  };
+
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return 'N/A';
+    return new Date(dateString).toLocaleString();
+  };
+
+  const getMessageStyles = () => {
+    switch (messageType) {
+      case 'success':
+        return 'bg-green-100 text-green-700';
+      case 'error':
+        return 'bg-red-100 text-red-700';
+      case 'info':
+      default:
+        return 'bg-blue-100 text-blue-700';
+    }
+  };
+
+  const handleCreateEvent = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!newEvent.summary || !newEvent.startDateTime || !newEvent.endDateTime) {
+      setMessage('Please fill in all required fields');
+      setMessageType('error');
+      return;
+    }
+
+    try {
+      setMessage('Creating event...');
+      setMessageType('info');
+
+      // Convert datetime-local to ISO format
+      const eventData = {
+        summary: newEvent.summary,
+        description: newEvent.description,
+        location: newEvent.location,
+        startDateTime: new Date(newEvent.startDateTime).toISOString(),
+        endDateTime: new Date(newEvent.endDateTime).toISOString(),
+      };
+
+      const response = await fetch('/api/calendar/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(eventData),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setMessage('Event created successfully!');
+        setMessageType('success');
+        setShowCreateForm(false);
+        setNewEvent({
+          summary: '',
+          description: '',
+          location: '',
+          startDateTime: '',
+          endDateTime: '',
+        });
+        fetchEvents();
+      } else {
+        setMessage(`Error: ${data.error}`);
+        setMessageType('error');
+      }
+    } catch (error) {
+      console.error('Error creating event:', error);
+      setMessage('Error creating event');
+      setMessageType('error');
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-xl">Loading...</div>
+      </div>
+    );
+  }
+
+  if (!authenticated) {
+    return null; // Will redirect in useEffect
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50 py-8">
+      <div className="max-w-6xl mx-auto px-4">
+        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+          <div className="flex justify-between items-center">
+            <div>
+              <h1 className="text-3xl font-bold mb-2 text-gray-800">
+                Calendar Webhook Dashboard
+              </h1>
+              <p className="text-gray-600">
+                Logged in as {user?.email}
+              </p>
+            </div>
+            <button
+              onClick={handleLogout}
+              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+            >
+              Logout
+            </button>
+          </div>
+        </div>
+
+        {message && (
+          <div className={`mb-6 p-4 rounded-lg ${getMessageStyles()}`}>
+            {message}
+          </div>
+        )}
+
+        {/* Webhook Status */}
+        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+          <h2 className="text-xl font-semibold mb-4 text-gray-800">
+            Webhook Status
+          </h2>
+
+          {watchStatus ? (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <span className="font-medium text-gray-700">Status:</span>
+                <span
+                  className={`px-3 py-1 rounded-full text-sm ${
+                    watchStatus.active
+                      ? 'bg-green-100 text-green-700'
+                      : 'bg-red-100 text-red-700'
+                  }`}
+                >
+                  {watchStatus.active ? 'Active' : 'Inactive'}
+                </span>
+              </div>
+
+              {watchStatus.channelId && (
+                <>
+                  <div>
+                    <span className="font-medium text-gray-700">Channel ID:</span>
+                    <span className="ml-2 text-gray-600 font-mono text-sm">
+                      {watchStatus.channelId}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="font-medium text-gray-700">Expires:</span>
+                    <span className="ml-2 text-gray-600">
+                      {formatDate(watchStatus.expiration)}
+                    </span>
+                  </div>
+                </>
+              )}
+
+              <div className="flex gap-3 pt-3">
+                {!watchStatus.active || watchStatus.expired ? (
+                  <button
+                    onClick={startWatch}
+                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                  >
+                    Start Watching
+                  </button>
+                ) : (
+                  <button
+                    onClick={stopWatch}
+                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                  >
+                    Stop Watching
+                  </button>
+                )}
+                <button
+                  onClick={fetchWatchStatus}
+                  className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+                >
+                  Refresh Status
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div>Loading watch status...</div>
+          )}
+        </div>
+
+        {/* Create Event Section */}
+        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-semibold text-gray-800">
+              Create New Event
+            </h2>
+            <button
+              onClick={() => setShowCreateForm(!showCreateForm)}
+              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+            >
+              {showCreateForm ? 'Cancel' : '+ New Event'}
+            </button>
+          </div>
+
+          {showCreateForm && (
+            <form onSubmit={handleCreateEvent} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Event Title <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={newEvent.summary}
+                  onChange={(e) =>
+                    setNewEvent({ ...newEvent, summary: e.target.value })
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Meeting with team"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Description
+                </label>
+                <textarea
+                  value={newEvent.description}
+                  onChange={(e) =>
+                    setNewEvent({ ...newEvent, description: e.target.value })
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Event description..."
+                  rows={3}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Location
+                </label>
+                <input
+                  type="text"
+                  value={newEvent.location}
+                  onChange={(e) =>
+                    setNewEvent({ ...newEvent, location: e.target.value })
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Conference room A"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Start Date & Time <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={newEvent.startDateTime}
+                    onChange={(e) =>
+                      setNewEvent({
+                        ...newEvent,
+                        startDateTime: e.target.value,
+                      })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    End Date & Time <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={newEvent.endDateTime}
+                    onChange={(e) =>
+                      setNewEvent({ ...newEvent, endDateTime: e.target.value })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+              >
+                Create Event
+              </button>
+            </form>
+          )}
+        </div>
+
+        {/* Calendar Events */}
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-semibold text-gray-800">
+              Upcoming Events
+            </h2>
+            <button
+              onClick={fetchEvents}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Refresh Events
+            </button>
+          </div>
+
+          {events.length === 0 ? (
+            <p className="text-gray-500">No upcoming events found.</p>
+          ) : (
+            <div className="space-y-4">
+              {events.map((event) => (
+                <div
+                  key={event.id}
+                  className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
+                >
+                  <h3 className="font-semibold text-lg text-gray-800">
+                    {event.summary || 'Untitled Event'}
+                  </h3>
+                  {event.description && (
+                    <p className="text-gray-600 mt-1">{event.description}</p>
+                  )}
+                  <div className="mt-2 text-sm text-gray-500">
+                    <div>
+                      Start: {formatDate(event.start?.dateTime || event.start?.date)}
+                    </div>
+                    <div>
+                      End: {formatDate(event.end?.dateTime || event.end?.date)}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+export default function DashboardPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-xl">Loading...</div>
+      </div>
+    }>
+      <DashboardContent />
+    </Suspense>
+  );
+}

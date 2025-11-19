@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GoogleCalendarClient } from '@/lib/google-calendar';
-import { TokenStorage } from '@/lib/token-storage';
+import { getSession } from '@/lib/session';
+import { google } from 'googleapis';
 
 export async function GET(request: NextRequest) {
   try {
@@ -10,13 +11,13 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       return NextResponse.redirect(
-        new URL(`/?error=${encodeURIComponent(error)}`, request.url)
+        new URL(`/login?error=${encodeURIComponent(error)}`, request.url)
       );
     }
 
     if (!code) {
       return NextResponse.redirect(
-        new URL('/?error=missing_code', request.url)
+        new URL('/login?error=missing_code', request.url)
       );
     }
 
@@ -25,23 +26,31 @@ export async function GET(request: NextRequest) {
 
     if (!tokens.access_token) {
       return NextResponse.redirect(
-        new URL('/?error=no_access_token', request.url)
+        new URL('/login?error=no_access_token', request.url)
       );
     }
 
-    // Save tokens to file
-    const storage = new TokenStorage();
-    storage.saveTokens({
-      access_token: tokens.access_token,
-      refresh_token: tokens.refresh_token || undefined,
-      expiry_date: tokens.expiry_date || undefined,
-    });
+    // Get user info from Google
+    const oauth2Client = new google.auth.OAuth2();
+    oauth2Client.setCredentials(tokens);
+    const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
+    const userInfo = await oauth2.userinfo.get();
 
-    return NextResponse.redirect(new URL('/?authenticated=true', request.url));
+    // Save tokens and user info in session
+    const session = await getSession();
+    session.userId = userInfo.data.id || '';
+    session.email = userInfo.data.email || '';
+    session.accessToken = tokens.access_token;
+    session.refreshToken = tokens.refresh_token || undefined;
+    session.expiryDate = tokens.expiry_date || undefined;
+    session.isLoggedIn = true;
+    await session.save();
+
+    return NextResponse.redirect(new URL('/dashboard?authenticated=true', request.url));
   } catch (error) {
     console.error('Error in OAuth callback:', error);
     return NextResponse.redirect(
-      new URL('/?error=auth_failed', request.url)
+      new URL('/login?error=auth_failed', request.url)
     );
   }
 }

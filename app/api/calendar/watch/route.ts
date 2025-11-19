@@ -1,14 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GoogleCalendarClient } from '@/lib/google-calendar';
-import { TokenStorage } from '@/lib/token-storage';
+import { getSession } from '@/lib/session';
 import { randomUUID } from 'crypto';
 
 export async function POST(request: NextRequest) {
   try {
-    const storage = new TokenStorage();
-    const tokens = storage.getTokens();
+    const session = await getSession();
 
-    if (!tokens?.access_token) {
+    if (!session.isLoggedIn || !session.accessToken) {
       return NextResponse.json(
         { error: 'Not authenticated' },
         { status: 401 }
@@ -24,19 +23,20 @@ export async function POST(request: NextRequest) {
     }
 
     const client = new GoogleCalendarClient();
-    client.setCredentials(tokens.access_token, tokens.refresh_token);
+    client.setCredentials(session.accessToken, session.refreshToken);
 
-    // Generate a unique channel ID
-    const channelId = randomUUID();
+    // Generate a unique channel ID with user ID
+    const channelId = `${session.userId}-${randomUUID()}`;
 
     const watchResponse = await client.watchCalendar(webhookUrl, channelId);
 
-    // Save watch channel info
-    storage.saveWatchChannel({
+    // Save watch channel info in session
+    session.watchChannel = {
       channelId: channelId,
       resourceId: watchResponse.resourceId,
       expiration: parseInt(watchResponse.expiration)
-    });
+    };
+    await session.save();
 
     return NextResponse.json({
       success: true,
@@ -56,18 +56,16 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE() {
   try {
-    const storage = new TokenStorage();
-    const tokens = storage.getTokens();
-    const watchChannel = storage.getWatchChannel();
+    const session = await getSession();
 
-    if (!tokens?.access_token) {
+    if (!session.isLoggedIn || !session.accessToken) {
       return NextResponse.json(
         { error: 'Not authenticated' },
         { status: 401 }
       );
     }
 
-    if (!watchChannel) {
+    if (!session.watchChannel) {
       return NextResponse.json(
         { error: 'No active watch channel' },
         { status: 404 }
@@ -75,12 +73,13 @@ export async function DELETE() {
     }
 
     const client = new GoogleCalendarClient();
-    client.setCredentials(tokens.access_token, tokens.refresh_token);
+    client.setCredentials(session.accessToken, session.refreshToken);
 
-    await client.stopWatchingCalendar(watchChannel.channelId, watchChannel.resourceId);
+    await client.stopWatchingCalendar(session.watchChannel.channelId, session.watchChannel.resourceId);
 
-    // Clear watch channel info
-    storage.clearWatchChannel();
+    // Clear watch channel info from session
+    session.watchChannel = undefined;
+    await session.save();
 
     return NextResponse.json({
       success: true,
@@ -98,10 +97,9 @@ export async function DELETE() {
 
 export async function GET() {
   try {
-    const storage = new TokenStorage();
-    const watchChannel = storage.getWatchChannel();
+    const session = await getSession();
 
-    if (!watchChannel) {
+    if (!session.watchChannel) {
       return NextResponse.json({
         active: false,
         message: 'No active watch channel'
@@ -109,13 +107,13 @@ export async function GET() {
     }
 
     const now = Date.now();
-    const isExpired = watchChannel.expiration < now;
+    const isExpired = session.watchChannel.expiration < now;
 
     return NextResponse.json({
       active: !isExpired,
-      channelId: watchChannel.channelId,
-      resourceId: watchChannel.resourceId,
-      expiration: new Date(watchChannel.expiration).toISOString(),
+      channelId: session.watchChannel.channelId,
+      resourceId: session.watchChannel.resourceId,
+      expiration: new Date(session.watchChannel.expiration).toISOString(),
       expired: isExpired
     });
 
